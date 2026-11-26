@@ -456,6 +456,10 @@ static selinux_enforcing_status selinux_status_from_cmdline() {
 
 static bool selinux_is_enforcing(void)
 {
+    // b8080f: SELinux stays permissive: the stock 3.4 kernel cannot label the boot filesystem, so an enforcing
+    // second-stage exec of /init is denied. The bootloader also ignores the boot.img cmdline,
+    // so androidboot.selinux=permissive cannot be passed. Never switch the kernel to enforcing.
+    return false;
     if (ALLOW_PERMISSIVE_SELINUX) {
         return selinux_status_from_cmdline() == SELINUX_ENFORCING;
     }
@@ -618,8 +622,9 @@ int main(int argc, char** argv) {
     // that the SELinux policy has been loaded.
     if (is_first_stage) {
         if (restorecon("/init") == -1) {
-            ERROR("restorecon failed: %s\n", strerror(errno));
-            security_failure();
+            ERROR("restorecon failed: %s (continuing)\n", strerror(errno));
+            // b8080f: stock 3.4 kernel cannot label the rootfs (no security.selinux xattr on rootfs);
+            // labelling /init fails with EOPNOTSUPP. Continue instead of rebooting into recovery.
         }
         char* path = argv[0];
         char* args[] = { path, const_cast<char*>("--second-stage"), nullptr };
